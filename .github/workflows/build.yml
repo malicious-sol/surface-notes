@@ -1,0 +1,138 @@
+# Builds a signed MSIX on every push to main and publishes it, with an
+# .appinstaller file, to GitHub Pages. The installed app checks that
+# .appinstaller each time it starts and updates itself in the background.
+name: Build installer
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: windows-2022
+    env:
+      SITE_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: microsoft/setup-msbuild@v2
+
+      - name: Set version
+        shell: pwsh
+        run: |
+          $v = "1.0.${{ github.run_number }}.0"
+          $path = (Resolve-Path SurfaceNotes/Package.appxmanifest).Path
+          [xml]$m = Get-Content $path
+          $m.Package.Identity.Version = $v
+          $m.Save($path)
+          "APP_VERSION=$v" >> $env:GITHUB_ENV
+          "SITE_URL=$($env:SITE_URL.ToLower())" >> $env:GITHUB_ENV
+
+      - name: Build package
+        shell: pwsh
+        run: |
+          msbuild SurfaceNotes.sln /restore /m /v:minimal `
+            /p:Configuration=Release /p:Platform=x64 `
+            /p:AppxBundle=Never /p:UapAppxPackageBuildMode=SideloadOnly `
+            /p:GenerateAppxPackageOnBuild=true /p:AppxPackageSigningEnabled=false `
+            "/p:AppxPackageDir=$pwd\out\\"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Sign package and write the site
+        shell: pwsh
+        env:
+          SIGNING_PFX_BASE64: ${{ secrets.SIGNING_PFX_BASE64 }}
+          SIGNING_PFX_PASSWORD: ${{ secrets.SIGNING_PFX_PASSWORD }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if (-not $env:SIGNING_PFX_BASE64) { throw 'The SIGNING_PFX_BASE64 secret is missing.' }
+
+          $msix = Get-ChildItem out -Recurse -Include *.msix, *.appx |
+            Where-Object { $_.FullName -notmatch '\\Dependencies\\' } | Select-Object -First 1
+          if (-not $msix) { Get-ChildItem out -Recurse | Select-Object FullName; throw 'No package was built.' }
+          Write-Host "Package: $($msix.FullName)"
+
+          $pfx = Join-Path $env:RUNNER_TEMP 'signing.pfx'
+          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:SIGNING_PFX_BASE64))
+          $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe" |
+            Sort-Object FullName -Descending | Select-Object -First 1
+          & $signtool.FullName sign /fd SHA256 /f $pfx /p $env:SIGNING_PFX_PASSWORD $msix.FullName
+          if ($LASTEXITCODE -ne 0) { throw 'Signing failed.' }
+          Remove-Item $pfx
+
+          New-Item -ItemType Directory -Force site/deps | Out-Null
+          Copy-Item $msix.FullName site/
+          Copy-Item installer/SurfaceNotes.cer site/
+          (Get-Content installer/install.ps1 -Raw).Replace('{{SITE_URL}}', $env:SITE_URL) | Set-Content site/install.ps1 -Encoding utf8
+          (Get-Content installer/index.html -Raw).Replace('{{SITE_URL}}', $env:SITE_URL).Replace('{{APP_VERSION}}', $env:APP_VERSION) | Set-Content site/index.html -Encoding utf8
+          New-Item site/.nojekyll -ItemType File | Out-Null
+
+          # Framework packages the app needs (.NET Native runtime, VC libs), so a fresh PC can install it.
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          function Get-Identity($path) {
+            $zip = [IO.Compression.ZipFile]::OpenRead($path)
+            try {
+              $reader = New-Object IO.StreamReader($zip.GetEntry('AppxManifest.xml').Open())
+              [xml]$x = $reader.ReadToEnd(); $reader.Close()
+              return $x.Package.Identity
+            } finally { $zip.Dispose() }
+          }
+          function Esc($s) { [Security.SecurityElement]::Escape($s) }
+          $deps = ''
+          $depDir = Join-Path $msix.DirectoryName 'Dependencies\x64'
+          if (Test-Path $depDir) {
+            foreach ($d in Get-ChildItem $depDir -Include *.appx, *.msix -Recurse) {
+              Copy-Item $d.FullName site/deps/
+              $id = Get-Identity $d.FullName
+              $deps += "    <Package Name=`"$(Esc $id.Name)`" Publisher=`"$(Esc $id.Publisher)`" Version=`"$($id.Version)`" ProcessorArchitecture=`"$($id.ProcessorArchitecture)`" Uri=`"$env:SITE_URL/deps/$($d.Name)`" />`n"
+            }
+          }
+
+          $main = Get-Identity $msix.FullName
+          $xml = @"
+          <?xml version="1.0" encoding="utf-8"?>
+          <AppInstaller xmlns="http://schemas.microsoft.com/appx/appinstaller/2018"
+                        Uri="$env:SITE_URL/SurfaceNotes.appinstaller" Version="$env:APP_VERSION">
+            <MainPackage Name="$(Esc $main.Name)" Publisher="$(Esc $main.Publisher)" Version="$($main.Version)"
+                         ProcessorArchitecture="$($main.ProcessorArchitecture)" Uri="$env:SITE_URL/$($msix.Name)" />
+            <Dependencies>
+          $deps    </Dependencies>
+            <UpdateSettings>
+              <OnLaunch HoursBetweenUpdateChecks="0" ShowPrompt="false" UpdateBlocksActivation="false" />
+              <AutomaticBackgroundTask />
+            </UpdateSettings>
+          </AppInstaller>
+          "@
+          if (-not $deps) { $xml = $xml -replace '(?s)\s*<Dependencies>\s*</Dependencies>', '' }
+          Set-Content site/SurfaceNotes.appinstaller $xml -Encoding utf8
+          Get-Content site/SurfaceNotes.appinstaller
+          Get-ChildItem site -Recurse | Select-Object FullName, Length
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SurfaceNotes-${{ env.APP_VERSION }}
+          path: site
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Surface Notes</title>
+<style>
+  :root { --bg:#f7f8fa; --fg:#1d2430; --muted:#5b6575; --card:#fff; --line:#dde1e6; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#14181e; --fg:#e7eaee; --muted:#9aa3b1; --card:#1c222a; --line:#2c333d; } }
+  body { margin:0; background:var(--bg); color:var(--fg); font:16px/1.55 "Segoe UI", system-ui, sans-serif; }
+  main { max-width:640px; margin:0 auto; padding:40px 16px; }
+  h1 { margin:0 0 4px; font-size:28px; }
+  p.v { margin:0 0 28px; color:var(--muted); }
+  ol { padding-left:20px; } li { margin:10px 0; }
+  code { display:block; background:var(--card); border:1px solid var(--line); border-radius:8px; padding:12px; margin-top:6px; overflow-x:auto; white-space:nowrap; font:14px Consolas, monospace; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Surface Notes</h1>
+  <p class="v">Version {{APP_VERSION}}</p>
+  <h2>Install (one time)</h2>
+  <ol>
+    <li>Click Start, type <b>PowerShell</b>, right-click <b>Windows PowerShell</b> and choose <b>Run as administrator</b>.</li>
+    <li>Paste this and press Enter:
+      <code>irm {{SITE_URL}}/install.ps1 | iex</code></li>
+    <li>Open <b>Surface Notes</b> from the Start menu.</li>
+  </ol>
+  <p>After that, the app updates itself in the background each time you open it.</p>
+</main>
+</body>
+</html>

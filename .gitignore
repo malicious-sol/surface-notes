@@ -1,0 +1,10 @@
+bin/
+obj/
+out/
+site/
+AppPackages/
+BundleArtifacts/
+.vs/
+*.user
+*.pfx
+*.pem
