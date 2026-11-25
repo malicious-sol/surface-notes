@@ -1,11 +1,13 @@
 # Builds a signed MSIX on every push to main and publishes it, with an
 # .appinstaller file, to GitHub Pages. The installed app checks that
-# .appinstaller each time it starts and updates itself in the background.
+# .appinstaller each time it starts and updates itself.
+# Pull requests are only compiled (not signed or published), to check them before they reach main.
 name: Build installer
 
 on:
   push:
     branches: [main]
+  pull_request:
   workflow_dispatch:
 
 permissions:
@@ -14,8 +16,12 @@ permissions:
   id-token: write
 
 concurrency:
-  group: pages
-  cancel-in-progress: false
+  group: ${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.number) || 'pages' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  # Major.minor of the app. The build number is added after it, so every build is newer than the last.
+  VERSION_PREFIX: '1.1'
 
 jobs:
   build:
@@ -30,7 +36,7 @@ jobs:
       - name: Set version
         shell: pwsh
         run: |
-          $v = "1.0.${{ github.run_number }}.0"
+          $v = "$env:VERSION_PREFIX.${{ github.run_number }}.0"
           $path = (Resolve-Path SurfaceNotes/Package.appxmanifest).Path
           [xml]$m = Get-Content $path
           $m.Package.Identity.Version = $v
@@ -49,6 +55,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Sign package and write the site
+        if: github.event_name != 'pull_request'
         shell: pwsh
         env:
           SIGNING_PFX_BASE64: ${{ secrets.SIGNING_PFX_BASE64 }}
@@ -121,15 +128,18 @@ jobs:
           Get-ChildItem site -Recurse | Select-Object FullName, Length
 
       - uses: actions/upload-artifact@v4
+        if: github.event_name != 'pull_request'
         with:
           name: SurfaceNotes-${{ env.APP_VERSION }}
           path: site
 
       - uses: actions/upload-pages-artifact@v3
+        if: github.event_name != 'pull_request'
         with:
           path: site
 
   deploy:
+    if: github.event_name != 'pull_request'
     needs: build
     runs-on: ubuntu-latest
     environment:

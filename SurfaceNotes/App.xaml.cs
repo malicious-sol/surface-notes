@@ -12,6 +12,13 @@ namespace SurfaceNotes
         {
             InitializeComponent();
             Suspending += OnSuspending;
+            EnteredBackground += OnEnteredBackground;
+            UnhandledException += OnUnhandledException;
+        }
+
+        private static MainPage CurrentPage
+        {
+            get { return (Window.Current?.Content as Frame)?.Content as MainPage; }
         }
 
         protected override void OnLaunched(LaunchActivatedEventArgs e)
@@ -29,19 +36,59 @@ namespace SurfaceNotes
             Window.Current.Activate();
         }
 
+        // Minimized, switched away from, or closing: save now.
+        private async void OnEnteredBackground(object sender, EnteredBackgroundEventArgs e)
+        {
+            var deferral = e.GetDeferral();
+            try
+            {
+                var page = CurrentPage;
+                if (page != null) await page.SaveNowAsync();
+            }
+            catch (Exception ex)
+            {
+                Log.Error("Saving when going to the background", ex);
+            }
+            finally
+            {
+                deferral.Complete();
+            }
+        }
+
         private async void OnSuspending(object sender, SuspendingEventArgs e)
         {
             var deferral = e.SuspendingOperation.GetDeferral();
             try
             {
-                var frame = Window.Current.Content as Frame;
-                if (frame?.Content is MainPage page)
+                var page = CurrentPage;
+                if (page != null) await page.SaveOrRescueAsync();
+            }
+            catch (Exception ex)
+            {
+                Log.Error("Saving on suspend", ex);
+            }
+            finally
+            {
+                deferral.Complete();
+            }
+        }
+
+        // A bug somewhere shouldn't close the window and take unsaved ink with it: log it, save, and keep going.
+        private void OnUnhandledException(object sender, Windows.UI.Xaml.UnhandledExceptionEventArgs e)
+        {
+            Log.Error("Unexpected error", e.Exception);
+            e.Handled = true;
+            try
+            {
+                var page = CurrentPage;
+                if (page != null)
                 {
-                    await page.SaveNowAsync();
+                    var ignored = page.SaveNowAsync();
                 }
             }
-            catch { }
-            deferral.Complete();
+            catch
+            {
+            }
         }
     }
 }

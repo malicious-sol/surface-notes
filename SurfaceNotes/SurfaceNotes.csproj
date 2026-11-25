@@ -53,7 +53,16 @@
     <Compile Include="MainPage.xaml.cs">
       <DependentUpon>MainPage.xaml</DependentUpon>
     </Compile>
-    <Compile Include="NotebookStore.cs" />
+    <Compile Include="MainPage.Dialogs.cs">
+      <DependentUpon>MainPage.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="MainPage.Notebooks.cs">
+      <DependentUpon>MainPage.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Log.cs" />
+    <Compile Include="Notebook.cs" />
+    <Compile Include="NotebookLibrary.cs" />
+    <Compile Include="PageStore.cs" />
     <Compile Include="UndoStack.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
