@@ -7,6 +7,7 @@ using Windows.ApplicationModel;
 using Windows.ApplicationModel.DataTransfer;
 using Windows.Devices.Input;
 using Windows.Foundation;
+using Windows.Management.Deployment;
 using Windows.Storage;
 using Windows.UI;
 using Windows.UI.Core;
@@ -634,35 +635,82 @@ namespace SurfaceNotes
             var panel = new StackPanel { Spacing = 8 };
             panel.Children.Add(new TextBlock { Text = string.Format("Version {0}.{1}.{2}", v.Major, v.Minor, v.Build), FontSize = 18 });
             panel.Children.Add(status);
-            var dialog = new ContentDialog { Title = "Surface Notes", Content = panel, CloseButtonText = "Close" };
+            var dialog = new ContentDialog
+            {
+                Title = "Surface Notes",
+                Content = panel,
+                PrimaryButtonText = "Update now",
+                IsPrimaryButtonEnabled = false,
+                CloseButtonText = "Close",
+            };
+            dialog.PrimaryButtonClick += async (d, args) =>
+            {
+                args.Cancel = true; // keep the dialog open to show progress
+                d.IsPrimaryButtonEnabled = false;
+                status.Text = "Saving your notes and installing the update. Surface Notes will close when it's done. Open it again from the Start menu.";
+                await SaveNowAsync();
+                string error = await InstallUpdateAsync();
+                if (error != null)
+                {
+                    status.Text = error;
+                    d.IsPrimaryButtonEnabled = true;
+                }
+            };
+
             var showing = dialog.ShowAsync();
-            status.Text = await CheckForUpdateTextAsync();
+            await CheckForUpdateAsync(status, dialog);
             await showing;
         }
 
-        private static async Task<string> CheckForUpdateTextAsync()
+        private static async Task CheckForUpdateAsync(TextBlock status, ContentDialog dialog)
         {
+            const string couldNotCheck = "Couldn't check for updates right now. Make sure you're online and try again.";
             try
             {
-                if (Package.Current.SignatureKind == PackageSignatureKind.Developer)
+                if (Package.Current.SignatureKind == PackageSignatureKind.Developer || Package.Current.GetAppInstallerInfo() == null)
                 {
-                    return "This copy was installed from Visual Studio, so it doesn't update itself.";
+                    status.Text = "This copy wasn't installed from the download page, so it can't update itself.";
+                    return;
                 }
                 var result = await Package.Current.CheckUpdateAvailabilityAsync();
                 switch (result.Availability)
                 {
                     case PackageUpdateAvailability.NoUpdates:
-                        return "You have the latest version. Updates install automatically when you open the app.";
+                        status.Text = "You have the latest version.";
+                        break;
                     case PackageUpdateAvailability.Available:
                     case PackageUpdateAvailability.Required:
-                        return "A new version is available. It installs in the background; close and reopen the app to get it.";
+                        status.Text = "A new version is available.";
+                        dialog.IsPrimaryButtonEnabled = true;
+                        break;
                     default:
-                        return "Couldn't check for updates right now. Updates still install automatically when you're online.";
+                        status.Text = couldNotCheck;
+                        break;
                 }
             }
             catch
             {
-                return "Couldn't check for updates right now. Updates still install automatically when you're online.";
+                status.Text = couldNotCheck;
+            }
+        }
+
+        /// <summary>Installs the newest version from the download page. Returns an error message, or null on success.</summary>
+        private static async Task<string> InstallUpdateAsync()
+        {
+            try
+            {
+                var info = Package.Current.GetAppInstallerInfo();
+                if (info == null) return "This copy wasn't installed from the download page, so it can't update itself.";
+                var pm = new PackageManager();
+                // The app is closed while the new version installs.
+                var result = await pm.AddPackageByAppInstallerFileAsync(
+                    info.Uri, AddPackageByAppInstallerOptions.ForceTargetAppShutdown, pm.GetDefaultPackageVolume());
+                if (result.ExtendedErrorCode != null) return "The update didn't install: " + result.ErrorText;
+                return null;
+            }
+            catch (Exception ex)
+            {
+                return "The update didn't install: " + ex.Message;
             }
         }
 
