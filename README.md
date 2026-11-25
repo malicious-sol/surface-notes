@@ -34,7 +34,7 @@ The download page is https://malicious-sol.github.io/surface-notes/.
 
 ## Updates
 
-Every push to `main` makes GitHub build a new signed version (see `.github/workflows/build.yml`) and publish it to the download page. The installed app checks for a new version each time you open it and updates in the background, so the next launch runs the new version. Your notes are kept.
+Every push to `main` makes GitHub build a new signed version (see `.github/workflows/build.yml`) and publish it to the download page. Each time you open the app it checks for a new version; if there is one, Windows shows a short "updating" window and then opens the new version. Your notes are kept.
 
 The signing key lives only in the repository secrets `SIGNING_PFX_BASE64` and `SIGNING_PFX_PASSWORD`. To create them (once), run this in PowerShell and follow the prompts:
 

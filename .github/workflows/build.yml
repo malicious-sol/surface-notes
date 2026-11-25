@@ -110,7 +110,7 @@ jobs:
             <Dependencies>
           $deps    </Dependencies>
             <UpdateSettings>
-              <OnLaunch HoursBetweenUpdateChecks="0" ShowPrompt="false" UpdateBlocksActivation="false" />
+              <OnLaunch HoursBetweenUpdateChecks="0" ShowPrompt="true" UpdateBlocksActivation="true" />
               <AutomaticBackgroundTask />
             </UpdateSettings>
           </AppInstaller>
