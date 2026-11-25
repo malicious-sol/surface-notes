@@ -115,6 +115,7 @@
                         <RowDefinition Height="*" />
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="2*" />
+                        <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
 
                     <Grid Grid.Row="0">
@@ -134,6 +135,14 @@
                     </Grid>
                     <ListView x:Name="PageList" Grid.Row="3" SelectionMode="Single"
                               SelectionChanged="PageList_SelectionChanged" RightTapped="PageList_RightTapped" />
+
+                    <Button Grid.Row="4" Click="About_Click" Background="Transparent" BorderThickness="0"
+                            HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Padding="8" Margin="0,8,0,0">
+                        <StackPanel Orientation="Horizontal" Spacing="12">
+                            <SymbolIcon Symbol="Setting" />
+                            <TextBlock Text="About and updates" />
+                        </StackPanel>
+                    </Button>
                 </Grid>
             </SplitView.Pane>
 

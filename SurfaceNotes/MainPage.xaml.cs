@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Windows.ApplicationModel;
 using Windows.ApplicationModel.DataTransfer;
 using Windows.Devices.Input;
 using Windows.Foundation;
@@ -622,6 +623,48 @@ namespace SurfaceNotes
         }
 
         private static bool IsReal(double d) { return !double.IsNaN(d) && !double.IsInfinity(d); }
+
+        // ---------------------------------------------------------------- about & updates
+
+        private async void About_Click(object sender, RoutedEventArgs e)
+        {
+            Split.IsPaneOpen = false;
+            var v = Package.Current.Id.Version;
+            var status = new TextBlock { Text = "Checking for updates...", TextWrapping = TextWrapping.Wrap, Foreground = new SolidColorBrush(Colors.Gray) };
+            var panel = new StackPanel { Spacing = 8 };
+            panel.Children.Add(new TextBlock { Text = string.Format("Version {0}.{1}.{2}", v.Major, v.Minor, v.Build), FontSize = 18 });
+            panel.Children.Add(status);
+            var dialog = new ContentDialog { Title = "Surface Notes", Content = panel, CloseButtonText = "Close" };
+            var showing = dialog.ShowAsync();
+            status.Text = await CheckForUpdateTextAsync();
+            await showing;
+        }
+
+        private static async Task<string> CheckForUpdateTextAsync()
+        {
+            try
+            {
+                if (Package.Current.SignatureKind == PackageSignatureKind.Developer)
+                {
+                    return "This copy was installed from Visual Studio, so it doesn't update itself.";
+                }
+                var result = await Package.Current.CheckUpdateAvailabilityAsync();
+                switch (result.Availability)
+                {
+                    case PackageUpdateAvailability.NoUpdates:
+                        return "You have the latest version. Updates install automatically when you open the app.";
+                    case PackageUpdateAvailability.Available:
+                    case PackageUpdateAvailability.Required:
+                        return "A new version is available. It installs in the background; close and reopen the app to get it.";
+                    default:
+                        return "Couldn't check for updates right now. Updates still install automatically when you're online.";
+                }
+            }
+            catch
+            {
+                return "Couldn't check for updates right now. Updates still install automatically when you're online.";
+            }
+        }
 
         // ---------------------------------------------------------------- dialogs
 
