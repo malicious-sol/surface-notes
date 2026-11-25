@@ -53,7 +53,7 @@ namespace SurfaceNotes
 
             foreach (var entry in Access.Entries.ToList())
             {
-                var parts = (entry.Metadata ?? "").Split('\n');
+                var parts = (entry.Metadata ?? "").Split('|'); // "notebook|<name>|<path>" ('|' can't be in a name or path)
                 if (parts[0] != NotebookTag) continue;
                 var nb = new Notebook
                 {
@@ -174,7 +174,7 @@ namespace SurfaceNotes
             nb.Name = folder.Name;
             nb.Path = folder.Path;
             nb.InApp = false;
-            Access.AddOrReplace(nb.Id, folder, NotebookTag + "\n" + folder.Name + "\n" + folder.Path);
+            Access.AddOrReplace(nb.Id, folder, NotebookTag + "|" + folder.Name + "|" + folder.Path);
         }
 
         public async Task<StorageFolder> GetLastLocationAsync()

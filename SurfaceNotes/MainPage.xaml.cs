@@ -236,7 +236,7 @@ namespace SurfaceNotes
             ignoringContact = false;
             if (!selectionRect.IsEmpty)
             {
-                if (selectionRect.Contains(pt))
+                if (selectionRect.Contains(pt) && !args.CurrentPoint.Properties.IsEraser)
                 {
                     movingSelection = true;
                     lastMovePoint = pt;
@@ -247,7 +247,7 @@ namespace SurfaceNotes
                 // doesn't draw, the same as in other note apps; the side button still starts a new lasso.
                 ClearSelection();
                 var props = args.CurrentPoint.Properties;
-                if (tool != Tool.Lasso && !props.IsBarrelButtonPressed && !props.IsRightButtonPressed)
+                if (props.IsEraser || (tool != Tool.Lasso && !props.IsBarrelButtonPressed && !props.IsRightButtonPressed))
                 {
                     ignoringContact = true;
                     return;
