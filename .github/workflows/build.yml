@@ -55,7 +55,7 @@ jobs:
           SIGNING_PFX_PASSWORD: ${{ secrets.SIGNING_PFX_PASSWORD }}
         run: |
           $ErrorActionPreference = 'Stop'
-          if (-not $env:SIGNING_PFX_BASE64) { throw 'The SIGNING_PFX_BASE64 secret is missing.' }
+          if (-not $env:SIGNING_PFX_BASE64) { throw 'The SIGNING_PFX_BASE64 secret is missing. Run installer/make-signing-key.ps1 (see README).' }
 
           $msix = Get-ChildItem out -Recurse -Include *.msix, *.appx |
             Where-Object { $_.FullName -notmatch '\\Dependencies\\' } | Select-Object -First 1
@@ -68,11 +68,13 @@ jobs:
             Sort-Object FullName -Descending | Select-Object -First 1
           & $signtool.FullName sign /fd SHA256 /f $pfx /p $env:SIGNING_PFX_PASSWORD $msix.FullName
           if ($LASTEXITCODE -ne 0) { throw 'Signing failed.' }
+          New-Item -ItemType Directory -Force site/deps | Out-Null
+          # Public half of the key, which install.ps1 tells Windows to trust.
+          $cert = New-Object Security.Cryptography.X509Certificates.X509Certificate2($pfx, $env:SIGNING_PFX_PASSWORD)
+          [IO.File]::WriteAllBytes((Join-Path $pwd 'site/SurfaceNotes.cer'), $cert.Export('Cert'))
           Remove-Item $pfx
 
-          New-Item -ItemType Directory -Force site/deps | Out-Null
           Copy-Item $msix.FullName site/
-          Copy-Item installer/SurfaceNotes.cer site/
           (Get-Content installer/install.ps1 -Raw).Replace('{{SITE_URL}}', $env:SITE_URL) | Set-Content site/install.ps1 -Encoding utf8
           (Get-Content installer/index.html -Raw).Replace('{{SITE_URL}}', $env:SITE_URL).Replace('{{APP_VERSION}}', $env:APP_VERSION) | Set-Content site/index.html -Encoding utf8
           New-Item site/.nojekyll -ItemType File | Out-Null
