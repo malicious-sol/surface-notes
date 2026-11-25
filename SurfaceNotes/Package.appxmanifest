@@ -39,6 +39,7 @@
   </Applications>
 
   <Capabilities>
+    <Capability Name="internetClient" />
     <!-- Lets the "Update now" button install the newest version. -->
     <rescap:Capability Name="packageManagement" />
   </Capabilities>

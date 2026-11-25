@@ -662,35 +662,45 @@ namespace SurfaceNotes
             await showing;
         }
 
+        private const string AppInstallerUrl = "https://malicious-sol.github.io/surface-notes/SurfaceNotes.appinstaller";
+
+        // The query string skips GitHub's ~10 minute cache so a new version shows up right away.
+        private static Uri FreshAppInstallerUri()
+        {
+            return new Uri(AppInstallerUrl + "?t=" + DateTime.UtcNow.Ticks);
+        }
+
         private static async Task CheckForUpdateAsync(TextBlock status, ContentDialog dialog)
         {
-            const string couldNotCheck = "Couldn't check for updates right now. Make sure you're online and try again.";
+            if (Package.Current.IsDevelopmentMode)
+            {
+                status.Text = "This copy was installed from Visual Studio, so it can't update itself. Run the install command once to switch to the self-updating version.";
+                return;
+            }
             try
             {
-                if (Package.Current.SignatureKind == PackageSignatureKind.Developer || Package.Current.GetAppInstallerInfo() == null)
+                Version latest;
+                using (var http = new System.Net.Http.HttpClient())
                 {
-                    status.Text = "This copy wasn't installed from the download page, so it can't update itself.";
-                    return;
+                    http.DefaultRequestHeaders.CacheControl = new System.Net.Http.Headers.CacheControlHeaderValue { NoCache = true };
+                    var xml = await http.GetStringAsync(FreshAppInstallerUri());
+                    latest = Version.Parse(System.Xml.Linq.XDocument.Parse(xml).Root.Attribute("Version").Value);
                 }
-                var result = await Package.Current.CheckUpdateAvailabilityAsync();
-                switch (result.Availability)
+                var v = Package.Current.Id.Version;
+                var current = new Version(v.Major, v.Minor, v.Build, v.Revision);
+                if (latest > current)
                 {
-                    case PackageUpdateAvailability.NoUpdates:
-                        status.Text = "You have the latest version.";
-                        break;
-                    case PackageUpdateAvailability.Available:
-                    case PackageUpdateAvailability.Required:
-                        status.Text = "A new version is available.";
-                        dialog.IsPrimaryButtonEnabled = true;
-                        break;
-                    default:
-                        status.Text = couldNotCheck;
-                        break;
+                    status.Text = string.Format("Version {0}.{1}.{2} is available.", latest.Major, latest.Minor, latest.Build);
+                    dialog.IsPrimaryButtonEnabled = true;
+                }
+                else
+                {
+                    status.Text = "You have the latest version.";
                 }
             }
             catch
             {
-                status.Text = couldNotCheck;
+                status.Text = "Couldn't check for updates right now. Make sure you're online and try again.";
             }
         }
 
@@ -699,12 +709,10 @@ namespace SurfaceNotes
         {
             try
             {
-                var info = Package.Current.GetAppInstallerInfo();
-                if (info == null) return "This copy wasn't installed from the download page, so it can't update itself.";
                 var pm = new PackageManager();
                 // The app is closed while the new version installs.
                 var result = await pm.AddPackageByAppInstallerFileAsync(
-                    info.Uri, AddPackageByAppInstallerOptions.ForceTargetAppShutdown, pm.GetDefaultPackageVolume());
+                    FreshAppInstallerUri(), AddPackageByAppInstallerOptions.ForceTargetAppShutdown, pm.GetDefaultPackageVolume());
                 if (result.ExtendedErrorCode != null) return "The update didn't install: " + result.ErrorText;
                 return null;
             }
